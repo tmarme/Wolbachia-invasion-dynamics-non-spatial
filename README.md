@@ -49,6 +49,7 @@ lambda.txt (a file for storing the per-capita female fecundity at the time
 that each cohort is hatched)
 
 release_size.txt (a file for storing the size of each Wolbachia release)
+
 700 (the day of the first release) 
 
 0.1 (additional density-INdependent daily mortality experienced by adults 
