@@ -44,6 +44,18 @@ stringstream strstm;
 int release_day;
 double release_size, DI_cost, DI_L_cost;
 
+double sh_res = 0, freqU = 0; // --- NEW: Addition of bidirectional CI ---
+// Previous model assumes the resident (natural) population is uninfected. In this
+// system, resident mosquitoes are infected with CI inducing Wolbachia.
+// sh_res : The strength of CI from the resident population, or the fraction of
+//          of eggs from released females that are lost when they mate with resident
+//          males.
+//          0 = No CI, 1 = Total incompatibility
+//          Intiialised to 0 so model behaves like original if it is never read
+// freqU  : The proportion of resident mosquitoes in the whole population of adults,
+//          measured tlagg days ago.
+//          Mirror of freqA from original model, where freqA + freqU = 1
+
 int main(){
 
 //Input and Output files
@@ -191,8 +203,11 @@ cin >> release_day;
 rel_siz_in >> release_size;
 cin >> DI_cost;
 cin >> DI_L_cost;
+cin >> sh_res; // --- NEW: Reading of sh_res, the final line in inits file ---
+    
 cout << "DI_cost " << DI_cost << " (additional density-INdependent daily mortality experienced by adults in the field environment) " << endl;
 cout << "DI_L_cost " << DI_L_cost << " (additional density-INdependent daily mortality experienced by larvae in the field environment) " << endl;
+cout << "sh_res " << sh_res << " (CI strength of resident females; 0 = unidirectional CI from release strain, as in the original model) " << endl; // --- NEW: Output sh_res in console ---
 
 }
 
@@ -521,10 +536,17 @@ for (int time1=1; time1<maxtime; time1++){
 	if (time1>=tlagg) {
 		if (A[time1-tlagg]>0) freqA = (A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg])/(A[time1-tlagg] + A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg]);
 		else freqA=0;
+        // --- NEW: Calculating the share of adults that are of resident (natural) population for bidirectional CI. ---
+        // Resident share of ALL adults on the same day, used for the reverse CI.
+        // Guarded on the TOTAL (not on A) so an empty resident class does not wrongly set freqU=0.
+        double A_total_lag = A[time1-tlagg] + A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg];
+        if (A_total_lag>0) freqU = A[time1-tlagg]/A_total_lag;
+        else freqU = 0;
 
 		A_ovipos[time1] = 0.5*(1-sh*freqA)*A[time1-tlagg+tlagp] * pow(survA,tlagg-tlagp-1);
-		A_ovipos_wolb[time1] = 0.5*A_wolb[time1-tlagg+tlagp] * pow(survA_wolb,tlagg-tlagp-1);
-		A_ovipos_wolb_imm[time1] = 0.5*A_wolb_imm[time1-tlagg+tlagp] * pow(survA_imm, tlagg-tlagp-1);
+        // Replace freqA with freqU
+        A_ovipos_wolb[time1] = 0.5*(1-sh_res*freqU)*A_wolb[time1-tlagg+tlagp] * pow(survA_wolb,tlagg-tlagp-1);
+        A_ovipos_wolb_imm[time1] = 0.5*(1-sh_res*freqU)*A_wolb_imm[time1-tlagg+tlagp] * pow(survA_imm, tlagg-tlagp-1);
 	}
 
 
