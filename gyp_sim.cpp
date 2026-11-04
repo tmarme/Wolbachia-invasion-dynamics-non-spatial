@@ -48,7 +48,7 @@ double sh_res = 0, freqU = 0; // --- NEW: Addition of bidirectional CI ---
 // Previous model assumes the resident (natural) population is uninfected. In this
 // system, resident mosquitoes are infected with CI inducing Wolbachia.
 // sh_res : The strength of CI from the resident population, or the fraction of
-//          of eggs from released females that are lost when they mate with resident
+//          eggs from released females that are lost when they mate with resident
 //          males.
 //          0 = No CI, 1 = Total incompatibility
 //          Intiialised to 0 so model behaves like original if it is never read
@@ -536,17 +536,26 @@ for (int time1=1; time1<maxtime; time1++){
 	if (time1>=tlagg) {
 		if (A[time1-tlagg]>0) freqA = (A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg])/(A[time1-tlagg] + A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg]);
 		else freqA=0;
-        // --- NEW: Calculating the share of adults that are of resident (natural) population for bidirectional CI. ---
-        // Resident share of ALL adults on the same day, used for the reverse CI.
-        // Guarded on the TOTAL (not on A) so an empty resident class does not wrongly set freqU=0.
-        double A_total_lag = A[time1-tlagg] + A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg];
-        if (A_total_lag>0) freqU = A[time1-tlagg]/A_total_lag;
+        
+        // --- NEW : Calculating the share of adults that are in resident (natural) population for bidirectional CI --
+        // Mirror of above calculation determining frequency of release strain adults.
+        // Frequency of resident adults tlagg days ago means eggs laid today reflect mosquito
+        // population tlagg days ago (accounts for days from eclose to oviposition).
+        if (A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg] > 0)
+            freqU = A[time1-tlagg] / (A[time1-tlagg] + A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg]);
         else freqU = 0;
 
 		A_ovipos[time1] = 0.5*(1-sh*freqA)*A[time1-tlagg+tlagp] * pow(survA,tlagg-tlagp-1);
-        // Replace freqA with freqU
+        // --NEW : Addition of mirrored multiplicative scaling factor --
+        // A_ovipos_wolb is the number of field-born release strain females laying viable eggs.
+        // Field-born females with release Wolbachia strain, could mate with resident males.
+        // (1-sh_res*freqU) represents the fraction of matings not affected by CI.
+        // (1-sh_res*freqU) is the mirror of (1-sh*freqA) on the resident ovipositon line.
         A_ovipos_wolb[time1] = 0.5*(1-sh_res*freqU)*A_wolb[time1-tlagg+tlagp] * pow(survA_wolb,tlagg-tlagp-1);
-        A_ovipos_wolb_imm[time1] = 0.5*(1-sh_res*freqU)*A_wolb_imm[time1-tlagg+tlagp] * pow(survA_imm, tlagg-tlagp-1);
+        // Unchanged. While the original model has no CI coming from resident population, the adults
+        // to be released will mate with eachother during rearing/storage before release. This
+        // compatible mating will therefore, not be affected by resident population CI capacity.
+        A_ovipos_wolb_imm[time1] = 0.5*A_wolb_imm[time1-tlagg+tlagp] * pow(survA_imm, tlagg-tlagp-1);
 	}
 
 
