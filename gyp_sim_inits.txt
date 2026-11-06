@@ -15,3 +15,4 @@ release_size.txt
 0.07
 0.01
 1
+0.522

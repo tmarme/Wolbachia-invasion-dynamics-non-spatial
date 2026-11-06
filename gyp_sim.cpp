@@ -2,6 +2,7 @@
 //The development of gyp_sim.cpp is described in Hancock et al. 2016, "Predicting Wolbachia
 //invasion dynamics in Aedes aegypti populations using models of density-dependent
 //demographic traits", BMC Biology.
+//Modifications of this model by Thomas M. Arme are prefixed with --- NEW:
 #include <iostream>
 #include <fstream>
 #include <cmath>
@@ -45,16 +46,28 @@ int release_day;
 double release_size, DI_cost, DI_L_cost;
 
 double sh_res = 0, freqU = 0; // --- NEW: Addition of bidirectional CI ---
-// Previous model assumes the resident (natural) population is uninfected. In this
+// Original model assumes the resident (natural) population is uninfected. In this
 // system, resident mosquitoes are infected with CI inducing Wolbachia.
 // sh_res : The strength of CI from the resident population, or the fraction of
 //          eggs from released females that are lost when they mate with resident
 //          males.
-//          0 = No CI, 1 = Total incompatibility
+//          0 = No CI (original model), 1 = Total incompatibility
 //          Intiialised to 0 so model behaves like original if it is never read
 // freqU  : The proportion of resident mosquitoes in the whole population of adults,
 //          measured tlagg days ago.
 //          Mirror of freqA from original model, where freqA + freqU = 1
+
+double hatch_ratio = 1, lambda_imm1 = 0; // --- New: Addition of differential hatch rates ---
+// Original model states no difference in hatch rates between resident and release strain females.
+// In this system, the hatch rate, measured in the model as per female fecundity (lambda),
+// will be less in release strain population than the resident population.
+// This is implimented as a hatch ratio, keeping the resident populaition lambda the same,
+// and reducing lambda of release strain females as a ratio of the resident lambda.
+// hatch_ratio : hatch rate of release Wolbachia eggs relative to resident eggs (resident = 1)
+//               1 = no difference (original model), 0.5 = Wolbachia eggs give 50% as many larvae
+//               relative to residents. Initialsed to 1.
+// lambda_imm1 : fecundity of released females after applying hatch_ratio, always the same for
+//               newly released immigrant females, as they don't experience a density effect.
 
 int main(){
 
@@ -203,11 +216,13 @@ cin >> release_day;
 rel_siz_in >> release_size;
 cin >> DI_cost;
 cin >> DI_L_cost;
-cin >> sh_res; // --- NEW: Reading of sh_res, the final line in inits file ---
+cin >> sh_res; // --- NEW: Reading of sh_res, as new line in inits file ---
+cin >> hatch_ratio; // --- NEW: Reading of hatch_ratio as new line in inits file ---
     
 cout << "DI_cost " << DI_cost << " (additional density-INdependent daily mortality experienced by adults in the field environment) " << endl;
 cout << "DI_L_cost " << DI_L_cost << " (additional density-INdependent daily mortality experienced by larvae in the field environment) " << endl;
 cout << "sh_res " << sh_res << " (CI strength of resident females; 0 = unidirectional CI from release strain, as in the original model) " << endl; // --- NEW: Output sh_res in console ---
+cout << "hatch_ratio " << hatch_ratio << " (hatch rate of Wolbachia eggs relative to resident eggs; 1 = no difference, as in the original) " << endl; // --- NEW: Output hatch_ratio in console ---
 
 }
 
@@ -384,14 +399,19 @@ for (int time1=1; time1<maxtime; time1++){
 
 			if (lambda1<lambda_min) lambda1=lambda_min;
 			if (lambda1>lambda_max) lambda1 = lambda_max;
-			lambda_wolb1 = lambda1;
+            lambda_wolb1 = hatch_ratio*lambda1; // --- NEW: Field-born females with release strain
+            // receive same density-dependent fecundity as residents in same cohort, scaled by
+            // the relative egg hatch rates
+            lambda_imm1 = hatch_ratio*lambda_max; // NEW: Released females receive no density
+            // dependent affect on fecundity, scaled by relative egg hatch rates as above.
 
 			lambda.at(cohort) = lambda1;
 			lambda_wolb.at(cohort) = lambda_wolb1;
 
  			if (time1>tlagh+tlagg){
-				hatch_sim.at(cohort) = lambda1*A_ovipos.at(time1-tlagh)+ w*lambda_wolb1*A_ovipos_wolb.at(time1-tlagh)+ w*lambda_max*A_ovipos_wolb_imm.at(time1-tlagh);
-				hatch_sim_wolb.at(cohort) = lambda_wolb1*(1-w)*A_ovipos_wolb.at(time1-tlagh) + lambda_max*(1-w)*A_ovipos_wolb_imm.at(time1-tlagh);
+				hatch_sim.at(cohort) = lambda1*A_ovipos.at(time1-tlagh)+ w*lambda_wolb1*A_ovipos_wolb.at(time1-tlagh)+ w*lambda_imm1*A_ovipos_wolb_imm.at(time1-tlagh);
+				hatch_sim_wolb.at(cohort) = lambda_wolb1*(1-w)*A_ovipos_wolb.at(time1-tlagh) + lambda_imm1*(1-w)*A_ovipos_wolb_imm.at(time1-tlagh);
+                // --- NEW: lambda_max replaced by lambda_imm1 (= hatch_ratio*lambda_max) so released females also carry the egg hatch ratio ---
 			}
 
 			L_cohort[time1][cohort] = hatch_sim.at(cohort);	
@@ -540,17 +560,17 @@ for (int time1=1; time1<maxtime; time1++){
         // --- NEW : Calculating the share of adults that are in resident (natural) population for bidirectional CI --
         // Mirror of above calculation determining frequency of release strain adults.
         // Frequency of resident adults tlagg days ago means eggs laid today reflect mosquito
-        // population tlagg days ago (accounts for days from eclose to oviposition).
+        // population tlagg days ago (accounts for days from pupation to oviposition).
         if (A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg] > 0)
             freqU = A[time1-tlagg] / (A[time1-tlagg] + A_wolb[time1-tlagg] + A_wolb_imm[time1-tlagg]);
         else freqU = 0;
 
 		A_ovipos[time1] = 0.5*(1-sh*freqA)*A[time1-tlagg+tlagp] * pow(survA,tlagg-tlagp-1);
-        // --NEW : Addition of mirrored multiplicative scaling factor --
+        // --- NEW : Addition of mirrored multiplicative scaling factor ---
         // A_ovipos_wolb is the number of field-born release strain females laying viable eggs.
         // Field-born females with release Wolbachia strain, could mate with resident males.
-        // (1-sh_res*freqU) represents the fraction of matings not affected by CI.
-        // (1-sh_res*freqU) is the mirror of (1-sh*freqA) on the resident ovipositon line.
+        // (1-sh_res*freqU) represents the expected proportion of matings not affected by CI.
+        // (1-sh_res*freqU) is the mirror of (1-sh*freqA) on the resident oviposition line.
         A_ovipos_wolb[time1] = 0.5*(1-sh_res*freqU)*A_wolb[time1-tlagg+tlagp] * pow(survA_wolb,tlagg-tlagp-1);
         // Unchanged. While the original model has no CI coming from resident population, the adults
         // to be released will mate with eachother during rearing/storage before release. This
